@@ -1,0 +1,32 @@
+ocr:
+  primary: "surya"
+  fallbac: "paddleocr"
+
+  surya:
+    device: "cuda"
+    compile: true
+    languages:
+      - "el"
+      - "en"
+  
+  paddleocr:
+    device: "gpu"
+    languages:
+      - "el"
+      - "en"
+    use_angle_cls: true
+
+vlm:
+  provider: "transformers"
+  model_path: "models/vlm/Qwen2.5-VL-or-Qwen3-VL-local"
+  device: "cuda"
+  dtype: "bfloat16"
+  max_new_tokens: 2048
+
+llm:
+  provider: "transformers"
+  model_path: "models/llm/NousResearch-Llama-2-13b-hf"
+  device: "cuda"
+  dtype: "bfloat16"
+  max_new_tokens: 4096
+  temperature: 0.0

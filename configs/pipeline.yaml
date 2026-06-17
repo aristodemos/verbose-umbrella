@@ -1,0 +1,71 @@
+runtime:
+  offline: true
+  device: "cuda"
+  precision: "bf16"
+  work_dir: "data/work"
+  cache_dir: "data/cache"
+
+input:
+  lang: "el"
+  expected_pdf_type: "generated_with_possible_embedded_images"
+
+output:
+  include_evidence: true
+  include_bounding_boxes: true
+  include_intermediate_artifacts: true
+  fail_on_schema_error: false
+
+pipeline:
+  stages:
+    - classify_pdf
+    - parse_docling
+    - parse_digital
+    - parse_ocr
+    - repair_layout
+    - merge_candidates
+    - extract_schema
+    - validate_json
+    - score_result
+  
+  quality:
+    min_text_confidence: 0.8
+    min_table_confidence: 0.75
+    ocr_when_natice_text_chars_below: 50
+    ocr_embedded_images: true
+    ocr_full_page_if_needed: true
+    require_evidence_for_fields: true
+
+  parsers:
+    docling:
+      enabled: true
+      priority: 1
+
+    digital:
+      enabled: true
+      priority: 2
+      engines:
+        pymupdf: true
+        pdfplumber: true
+        camelot: true
+      camelot_modes:
+        - stream
+        - lattice
+
+    ocr:
+      enabled: true
+      priority: 3
+      engines:
+        surya: true
+        paddleocr: true
+        tesseract: true
+    
+    vlm:
+      enabled: true
+      only_for_low_confidence_regions: true
+      max_regions_per_page: 5
+  
+  schema_extraction:
+    engine: "local_llm"
+    schema_path: "configs/schema/default_document.schema.json"
+    prompt_path: "configs/prompts/json_extraction_el.md"
+    
