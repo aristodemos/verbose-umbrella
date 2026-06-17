@@ -2,7 +2,7 @@ First build order
 
 Do it in this order:
 
-Implement PyMuPDF text + image detection fully.
+Implement PyMuPDF text + image detection fully.  -> DONE
 Implement Camelot table extraction.
 Implement pdfplumber table fallback and debug image export.
 Implement Docling parser and compare against deterministic output.
