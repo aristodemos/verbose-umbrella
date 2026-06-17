@@ -15,11 +15,11 @@ from pdf_json_parser.stages.score_result import score_result
 
 
 class PdfJsonPipeline:
-    def __init__(self) -> None:
+    def __init__(self, debug_image_dir: Path | None = None) -> None:
         self.docling = DoclingParser()
         self.digital_parsers = [
             PyMuPDFParser(),
-            PdfPlumberParser(),
+            PdfPlumberParser(debug_output_dir=debug_image_dir),
             CamelotParser(),
         ]
         self.ocr_parsers = [

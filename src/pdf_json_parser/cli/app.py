@@ -24,6 +24,11 @@ def parse(
         "-o",
         help="Path to the output JSON file."
     ),
+    debug_images_dir: Path | None = typer.Option(
+        None,
+        "--debug-images-dir",
+        help="Optional directory where pdfplumber page debug renders will be exported.",
+    ),
 ) -> None:
     """
     Parse a PDF file and extract structured JSON data based on the provided schema.
@@ -31,8 +36,10 @@ def parse(
     console.print(f"[bold green]Parsing PDF:[/bold green] {pdf}")
     console.print(f"[bold blue]Using schema:[/bold blue] {schema}")
     console.print(f"[bold yellow]Output will be saved to:[/bold yellow] {output}")
+    if debug_images_dir is not None:
+        console.print(f"[bold magenta]Debug images will be saved to:[/bold magenta] {debug_images_dir}")
 
-    pipeline = PdfJsonPipeline()
+    pipeline = PdfJsonPipeline(debug_image_dir=debug_images_dir)
     result = pipeline.run(pdf, schema)
 
     # Ensure the output directory exists
