@@ -28,25 +28,46 @@ class PdfJsonPipeline:
         ]
 
     def run(self, pdf_path: Path, schema_path: Path) -> ExtractionResult:
-        candidates: list[ParsedDocument] = []
+        docling_candidate: ParsedDocument | None = None
+        deterministic_candidates: list[ParsedDocument] = []
 
-        # Option 1: Docling-first structured extraction.
+        # Structured extraction is evaluated against deterministic parsers instead of
+        # being merged into them blindly.
         try:
-            candidates.append(self.docling.parse(pdf_path))
+            docling_candidate = self.docling.parse(pdf_path)
         except Exception as e:
             print(f"[warning] Docling parser failed: {e}")
         
-        # Option 2: Deterministic Digital PDF extraction.
+        # Deterministic digital PDF extraction remains the primary baseline.
         for parser in self.digital_parsers:
             try:
-                candidates.append(parser.parse(pdf_path))
+                deterministic_candidates.append(parser.parse(pdf_path))
             except Exception as e:
                 print(f"[warning] Digital parser {parser.name} failed: {e}")
         
-        # Merge current result and decide whether OCR is needed.
-        merged = merge_documents(candidates)
+        if deterministic_candidates:
+            merged = merge_documents(deterministic_candidates)
+        elif docling_candidate is not None:
+            merged = docling_candidate
+            merged.warnings.append(
+                "Using Docling output because deterministic parsers did not produce a candidate."
+            )
+        else:
+            merged = ParsedDocument(source_path=str(pdf_path), page_count=0)
+
+        if docling_candidate is not None:
+            if merged is not docling_candidate:
+                merged.warnings.extend(
+                    f"{docling_candidate.source_path}: {warning}"
+                    for warning in docling_candidate.warnings
+                )
+            if deterministic_candidates:
+                merged.warnings.extend(
+                    self._compare_docling_to_deterministic(docling_candidate, merged)
+                )
 
         if self._needs_ocr(merged):
+            candidates = [merged]
             for parser in self.ocr_parsers:
                 try:
                     candidates.append(parser.parse(pdf_path))
@@ -54,6 +75,8 @@ class PdfJsonPipeline:
                     print(f"[warning] OCR parser {parser.name} failed: {e}")
             
             merged = merge_documents(candidates)
+
+        merged.warnings = self._normalize_warnings(pdf_path, merged.warnings)
         
         extracted = extract_schema_json(merged, schema_path)
         schema_errors = validate_extracted_json(extracted, schema_path)
@@ -67,6 +90,69 @@ class PdfJsonPipeline:
         result.score = score_result(result)
 
         return result
+
+    def _compare_docling_to_deterministic(
+        self,
+        docling_document: ParsedDocument,
+        deterministic_document: ParsedDocument,
+    ) -> list[str]:
+        docling_lines = self._normalized_text_lines(docling_document)
+        deterministic_lines = self._normalized_text_lines(deterministic_document)
+        shared_lines = docling_lines & deterministic_lines
+        denominator = len(deterministic_lines) or 1
+        overlap = len(shared_lines) / denominator
+
+        warnings = [
+            "Docling comparison against deterministic output: "
+            f"text_blocks={len(docling_document.text_blocks)}/{len(deterministic_document.text_blocks)}, "
+            f"tables={len(docling_document.tables)}/{len(deterministic_document.tables)}, "
+            f"line_overlap={overlap:.3f}"
+        ]
+
+        if deterministic_lines and overlap < 0.5:
+            warnings.append(
+                "Docling text diverges from deterministic output "
+                f"(normalized line overlap {overlap:.3f})."
+            )
+
+        if len(docling_document.tables) != len(deterministic_document.tables):
+            warnings.append(
+                "Docling table count differs from deterministic output "
+                f"({len(docling_document.tables)} vs {len(deterministic_document.tables)})."
+            )
+
+        return warnings
+
+    def _normalized_text_lines(self, document: ParsedDocument) -> set[str]:
+        normalized_lines: set[str] = set()
+        for block in document.text_blocks:
+            normalized = " ".join(block.text.split()).strip().lower()
+            if normalized:
+                normalized_lines.add(normalized)
+        return normalized_lines
+
+    def _normalize_warnings(self, pdf_path: Path, warnings: list[str]) -> list[str]:
+        source_prefix = f"{pdf_path}: "
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for warning in warnings:
+            cleaned = warning.strip()
+            while cleaned.startswith(source_prefix):
+                cleaned = cleaned[len(source_prefix):].strip()
+
+            if cleaned.startswith("Docling "):
+                cleaned = f"{source_prefix}{cleaned}"
+            elif warning.startswith(source_prefix):
+                cleaned = f"{source_prefix}{cleaned}"
+
+            if cleaned in seen:
+                continue
+
+            seen.add(cleaned)
+            normalized.append(cleaned)
+
+        return normalized
 
     def _needs_ocr(self, document: ParsedDocument) -> bool:
         # Implement logic to determine if OCR is needed based on the merged document.   
