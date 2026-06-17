@@ -1,0 +1,72 @@
+[project]
+name = "pdf-json-parser"
+version = "0.1.0"
+description = "Offline PDF to structured JSON extraction pipeline. Main language is Greek."
+readme = "README.md"
+authors = [
+    { name = "aristodemos", email = "aristodemos@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "typer>=0.12",
+    "rich>=13.7",
+    "loguru>=0.7",
+    "pyyaml>=6.0",
+    "orjson>=3.10",
+    "jsonschema>=4.23",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pillow>=10.4",
+    "opencv-python>=4.10",
+    "pymupdf>=1.24",
+    "pdfplumber>=0.11",
+    "camelot-py[cv]>=0.11",
+    "pypdfium2>=4.30",
+]
+
+[project.optional-dependencies]
+docling = [
+    "docling",
+]
+
+ocr = [
+    "paddleocr",
+    "surya-ocr",
+    "pytesseract",
+]
+
+llm = [
+    "transformers>=4.45",
+    "accelerate>=0.34",
+    "sentencepiece",
+    "protobuf",
+    "outlines",
+]
+
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "ipykernel",
+    "jupyterlab",
+]
+
+[project.scripts]
+pdf-json-parser = "pdf_json_parser.cli.app:app"
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# [build-system]
+# requires = ["uv_build>=0.9.28,<0.10.0"]
+# build-backend = "uv_build"
