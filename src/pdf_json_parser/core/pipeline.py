@@ -71,7 +71,7 @@ class PdfJsonPipeline:
     def _needs_ocr(self, document: ParsedDocument) -> bool:
         # Implement logic to determine if OCR is needed based on the merged document.   
         total_chars = sum(len(block.text.strip()) for block in document.text_blocks)
-        has_tables = len(document.table) > 0
+        has_tables = len(document.tables) > 0
 
         if total_chars < 50:
             print("[info] Low text content detected. OCR may be needed.")
@@ -79,6 +79,10 @@ class PdfJsonPipeline:
 
         if not has_tables:
             print("[info] No tables detected. OCR may be needed.")
+            return True
+
+        if document.image_blocks:
+            print("[info] Embedded images detected. OCR may be needed.")
             return True
 
         if any("embedded image" in warning.lower() for warning in document.warnings):

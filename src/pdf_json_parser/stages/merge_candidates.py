@@ -16,7 +16,7 @@ def merge_documents(candidates: list[ParsedDocument]) -> ParsedDocument:
     # Start with the candidate with the most text blocks as the base for merging.
     best = max(
         candidates, 
-        key=lambda doc: (len(doc.tables), 
+        key=lambda doc: (len(doc.tables),
                          sum(len(block.text) for block in doc.text_blocks),
         ),
     )
@@ -30,6 +30,7 @@ def merge_documents(candidates: list[ParsedDocument]) -> ParsedDocument:
     # Naive first pass. Later: deduplicate by page + bbox + text similarity.
     for doc in candidates:
         merged.text_blocks.extend(doc.text_blocks)
+        merged.image_blocks.extend(doc.image_blocks)
         merged.tables.extend(doc.tables)
         merged.warnings.extend(f"{doc.source_path}: {warning}" for warning in doc.warnings)
     

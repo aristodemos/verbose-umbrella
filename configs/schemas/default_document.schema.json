@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Default Greek PDF Extraction",
+  "type": "object",
+  "required": ["language", "source_path", "page_count"],
+  "properties": {
+    "language": {
+      "type": "string"
+    },
+    "source_path": {
+      "type": "string"
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "text_block_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "table_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true
+}
