@@ -4,8 +4,7 @@ from typing import Any
 from pdf_json_parser.models.document import ParsedDocument
 
 
-
-def extract_schema_json(document: ParsedDocument) -> dict[str, Any]:
+def extract_schema_json(document: ParsedDocument, schema_path: Path | None = None) -> dict[str, Any]:
     """
     Extracts a JSON representation of the schema from a ParsedDocument.
 
@@ -24,5 +23,6 @@ def extract_schema_json(document: ParsedDocument) -> dict[str, Any]:
         "source_path": document.source_path,
         "page_count": document.page_count,
         "text_block_count": len(document.text_blocks),
-        "table_count": len(document.table),
+        "table_count": len(document.tables),
+        "image_block_count": len(document.image_blocks),
     }
