@@ -14,7 +14,7 @@ from pdf_json_parser.models.geometry import BBox, Evidence
 from pdf_json_parser.parsers.pymupdf_parser import PyMuPDFParser
 from pdf_json_parser.parsers.surya_parser import SuryaParser
 
-SURYA_TEST_INFERENCE_URL = "http://127.0.0.1:8000/v1"
+SURYA_TEST_INFERENCE_URL = "http://localhost:8000/v1"
 SURYA_TEST_OVERRIDE_URL = "http://127.0.0.1:8001/v1"
 
 
@@ -133,7 +133,7 @@ def test_surya_parser_applies_runtime_settings_from_models_config(
         """
 ocr:
   surya:
-    backend: "llamacpp"
+    backend: "vllm"
     inference_url: "%s"
 """ % SURYA_TEST_INFERENCE_URL,
         encoding="utf-8",
@@ -174,6 +174,42 @@ ocr:
 
     assert os.environ["SURYA_INFERENCE_BACKEND"] == "llamacpp"
     assert os.environ["SURYA_INFERENCE_URL"] == SURYA_TEST_INFERENCE_URL
+
+
+def test_pipeline_does_not_require_full_document_ocr_for_flagged_image_regions_only() -> None:
+    from pdf_json_parser.core.pipeline import PdfJsonPipeline
+
+    pipeline = PdfJsonPipeline()
+    document = ParsedDocument(
+        source_path="sample.pdf",
+        page_count=1,
+        text_blocks=[
+            TextBlock(
+                text="This page already has enough native text to avoid whole-document OCR.",
+                evidence=Evidence(
+                    page=1,
+                    bbox=BBox(x0=0, y0=0, x1=100, y1=20),
+                    method="native_pdf_text",
+                    parser="test",
+                    confidence=1.0,
+                ),
+            )
+        ],
+        image_blocks=[
+            ImageBlock(
+                evidence=Evidence(
+                    page=1,
+                    bbox=BBox(x0=10, y0=20, x1=30, y1=40),
+                    method="embedded_image_object",
+                    parser="pymupdf",
+                    confidence=1.0,
+                )
+            )
+        ],
+        warnings=["Embedded image objects detected on page 1: 1"],
+    )
+
+    assert pipeline._needs_ocr(document) is False
 
 
 def test_pipeline_calls_surya_only_for_image_regions(monkeypatch, tmp_path: Path) -> None:
@@ -261,12 +297,84 @@ def test_pipeline_calls_surya_only_for_image_regions(monkeypatch, tmp_path: Path
         lambda _extracted, _schema_path: [],
     )
     monkeypatch.setattr("pdf_json_parser.core.pipeline.score_result", lambda _result: 1.0)
-    monkeypatch.setattr(pipeline, "_needs_ocr", lambda _document: True)
+    monkeypatch.setattr(pipeline, "_needs_ocr", lambda _document: False)
 
     schema_path = tmp_path / "schema.json"
     schema_path.write_text("{}", encoding="utf-8")
 
     result = pipeline.run(tmp_path / "sample.pdf", schema_path)
 
-    assert parse_calls == {"paddle": 1, "surya_parse": 0, "surya_regions": 1}
+    assert parse_calls == {"paddle": 0, "surya_parse": 0, "surya_regions": 1}
     assert result.document.text_blocks[0].text == "region ocr"
+
+
+def test_pipeline_calls_full_document_ocr_when_native_text_is_insufficient(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from pdf_json_parser.core.pipeline import PdfJsonPipeline
+
+    pipeline = PdfJsonPipeline()
+    low_text_document = ParsedDocument(
+        source_path=str(tmp_path / "sample.pdf"),
+        page_count=1,
+        text_blocks=[],
+    )
+
+    pipeline.docling = SimpleNamespace(
+        parse=lambda _pdf_path: ParsedDocument(source_path="docling", page_count=1),
+        name="docling",
+    )
+    pipeline.digital_parsers = [
+        SimpleNamespace(parse=lambda _pdf_path: low_text_document, name="digital")
+    ]
+
+    parse_calls = {"paddle": 0, "surya_parse": 0, "surya_regions": 0}
+
+    class FakePaddleParser:
+        name = "paddleocr"
+
+        def parse(self, _pdf_path: Path) -> ParsedDocument:
+            parse_calls["paddle"] += 1
+            return ParsedDocument(source_path=str(tmp_path / "sample.pdf"), page_count=1)
+
+    class FakeSuryaParser:
+        name = "surya"
+
+        def parse(self, _pdf_path: Path) -> ParsedDocument:
+            parse_calls["surya_parse"] += 1
+            raise AssertionError("pipeline should not call Surya.parse for whole documents")
+
+        def parse_image_regions(
+            self,
+            _pdf_path: Path,
+            image_regions: list[ImageBlock],
+            page_count: int,
+        ) -> ParsedDocument:
+            parse_calls["surya_regions"] += 1
+            assert image_regions == []
+            assert page_count == 1
+            return ParsedDocument(source_path=str(tmp_path / "sample.pdf"), page_count=1)
+
+    pipeline.ocr_parsers = [FakePaddleParser(), FakeSuryaParser()]
+
+    monkeypatch.setattr(
+        "pdf_json_parser.core.pipeline.merge_documents",
+        lambda candidates: candidates[0],
+    )
+    monkeypatch.setattr(
+        "pdf_json_parser.core.pipeline.extract_schema_json",
+        lambda document, _schema_path: {"text": [block.text for block in document.text_blocks]},
+    )
+    monkeypatch.setattr(
+        "pdf_json_parser.core.pipeline.validate_extracted_json",
+        lambda _extracted, _schema_path: [],
+    )
+    monkeypatch.setattr("pdf_json_parser.core.pipeline.score_result", lambda _result: 1.0)
+
+    schema_path = tmp_path / "schema.json"
+    schema_path.write_text("{}", encoding="utf-8")
+
+    pipeline.run(tmp_path / "sample.pdf", schema_path)
+
+    assert parse_calls == {"paddle": 1, "surya_parse": 0, "surya_regions": 0}

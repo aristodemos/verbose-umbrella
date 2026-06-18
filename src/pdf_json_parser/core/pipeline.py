@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pdf_json_parser.models.document import ParsedDocument
+from pdf_json_parser.models.document import ImageBlock, ParsedDocument
 from pdf_json_parser.models.extraction import ExtractionResult
 from pdf_json_parser.parsers.docling_parser import DoclingParser
 from pdf_json_parser.parsers.pymupdf_parser import PyMuPDFParser
@@ -66,22 +66,26 @@ class PdfJsonPipeline:
                     self._compare_docling_to_deterministic(docling_candidate, merged)
                 )
 
-        if self._needs_ocr(merged):
+        flagged_image_regions = self._flagged_image_regions(merged)
+        needs_full_document_ocr = self._needs_ocr(merged)
+
+        if flagged_image_regions or needs_full_document_ocr:
             candidates = [merged]
             for parser in self.ocr_parsers:
                 try:
                     if parser.name == SuryaParser.name and hasattr(parser, "parse_image_regions"):
-                        if merged.image_blocks:
+                        if flagged_image_regions:
                             candidates.append(
                                 parser.parse_image_regions(
                                     pdf_path,
-                                    merged.image_blocks,
+                                    flagged_image_regions,
                                     merged.page_count,
                                 )
                             )
                         continue
 
-                    candidates.append(parser.parse(pdf_path))
+                    if needs_full_document_ocr:
+                        candidates.append(parser.parse(pdf_path))
                 except Exception as e:
                     print(f"[warning] OCR parser {parser.name} failed: {e}")
             
@@ -166,25 +170,15 @@ class PdfJsonPipeline:
         return normalized
 
     def _needs_ocr(self, document: ParsedDocument) -> bool:
-        # Implement logic to determine if OCR is needed based on the merged document.   
+        # Full-document OCR is reserved for pages with too little native text.
         total_chars = sum(len(block.text.strip()) for block in document.text_blocks)
-        has_tables = len(document.tables) > 0
 
         if total_chars < 50:
             print("[info] Low text content detected. OCR may be needed.")
             return True
 
-        if not has_tables:
-            print("[info] No tables detected. OCR may be needed.")
-            return True
-
-        if document.image_blocks:
-            print("[info] Embedded images detected. OCR may be needed.")
-            return True
-
-        if any("embedded image" in warning.lower() for warning in document.warnings):
-            print("[info] Embedded images detected. OCR may be needed.")
-            return True
-
         return False
+
+    def _flagged_image_regions(self, document: ParsedDocument) -> list[ImageBlock]:
+        return list(document.image_blocks)
     

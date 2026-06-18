@@ -20,7 +20,7 @@ uv sync --extra dev --extra docling --extra ocr --extra llm
 
 ### TO run
 ```bash
-uv run pdf-json-parser parse data/input/example.pdf \
+uv run pdf-json-parser data/input/somatosensory.pdf
   --schema configs/schemas/default_document.schema.json \
   --output data/output/example.result.json
 ```
