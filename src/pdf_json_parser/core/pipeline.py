@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Callable
 
 from pdf_json_parser.models.document import ImageBlock, ParsedDocument
 from pdf_json_parser.models.extraction import ExtractionResult
@@ -15,17 +16,64 @@ from pdf_json_parser.stages.score_result import score_result
 
 
 class PdfJsonPipeline:
-    def __init__(self, debug_image_dir: Path | None = None) -> None:
-        self.docling = DoclingParser()
+    AVAILABLE_PARSERS = frozenset(
+        {
+            DoclingParser.name,
+            PyMuPDFParser.name,
+            PdfPlumberParser.name,
+            CamelotParser.name,
+            PaddleOCRParser.name,
+            SuryaParser.name,
+        }
+    )
+
+    def __init__(
+        self,
+        debug_image_dir: Path | None = None,
+        enabled_parsers: set[str] | None = None,
+    ) -> None:
+        self.enabled_parsers = (
+            self._normalize_enabled_parsers(enabled_parsers)
+            if enabled_parsers is not None
+            else set(self.AVAILABLE_PARSERS)
+        )
+
+        parser_factories: dict[str, Callable[[], object]] = {
+            DoclingParser.name: DoclingParser,
+            PyMuPDFParser.name: PyMuPDFParser,
+            PdfPlumberParser.name: lambda: PdfPlumberParser(debug_output_dir=debug_image_dir),
+            CamelotParser.name: CamelotParser,
+            PaddleOCRParser.name: PaddleOCRParser,
+            SuryaParser.name: SuryaParser,
+        }
+
+        self.docling = (
+            parser_factories[DoclingParser.name]()
+            if DoclingParser.name in self.enabled_parsers
+            else None
+        )
         self.digital_parsers = [
-            PyMuPDFParser(),
-            PdfPlumberParser(debug_output_dir=debug_image_dir),
-            CamelotParser(),
+            parser_factories[name]()
+            for name in (PyMuPDFParser.name, PdfPlumberParser.name, CamelotParser.name)
+            if name in self.enabled_parsers
         ]
         self.ocr_parsers = [
-            PaddleOCRParser(),
-            SuryaParser(),
+            parser_factories[name]()
+            for name in (PaddleOCRParser.name, SuryaParser.name)
+            if name in self.enabled_parsers
         ]
+
+    @classmethod
+    def _normalize_enabled_parsers(cls, enabled_parsers: set[str]) -> set[str]:
+        normalized = {parser.strip().lower() for parser in enabled_parsers if parser.strip()}
+        unknown = normalized - cls.AVAILABLE_PARSERS
+        if unknown:
+            supported = ", ".join(sorted(cls.AVAILABLE_PARSERS))
+            unknown_values = ", ".join(sorted(unknown))
+            raise ValueError(
+                f"Unknown parser selection: {unknown_values}. Supported parsers: {supported}."
+            )
+        return normalized
 
     def run(self, pdf_path: Path, schema_path: Path) -> ExtractionResult:
         docling_candidate: ParsedDocument | None = None
@@ -33,10 +81,11 @@ class PdfJsonPipeline:
 
         # Structured extraction is evaluated against deterministic parsers instead of
         # being merged into them blindly.
-        try:
-            docling_candidate = self.docling.parse(pdf_path)
-        except Exception as e:
-            print(f"[warning] Docling parser failed: {e}")
+        if self.docling is not None:
+            try:
+                docling_candidate = self.docling.parse(pdf_path)
+            except Exception as e:
+                print(f"[warning] Docling parser failed: {e}")
         
         # Deterministic digital PDF extraction remains the primary baseline.
         for parser in self.digital_parsers:

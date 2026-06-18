@@ -36,6 +36,8 @@ pipeline:
     require_evidence_for_fields: true
 
   parsers:
+    selected: []
+
     docling:
       enabled: true
       priority: 1

@@ -25,7 +25,24 @@ uv run pdf-json-parser data/input/somatosensory.pdf
   --output data/output/example.result.json
 ```
 
+### Run specific parsers
+Use one parser:
+
+```bash
+uv run pdf-json-parser data/input/somatosensory.pdf --parser pymupdf
+```
+
+Use a subset:
+
+```bash
+uv run pdf-json-parser data/input/somatosensory.pdf \
+  --parser pymupdf \
+  --parser camelot,surya
+```
+
+You can also set defaults in `configs/pipeline.yaml` with `pipeline.parsers.selected`
+or the existing per-engine `enabled` flags. CLI `--parser` values override the config file.
+
 ## Offline model policy
 All model weights must be stored under models/.
 No runtime downloads are allowed in production.
-
