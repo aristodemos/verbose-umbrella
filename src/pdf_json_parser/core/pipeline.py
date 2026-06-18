@@ -70,6 +70,17 @@ class PdfJsonPipeline:
             candidates = [merged]
             for parser in self.ocr_parsers:
                 try:
+                    if parser.name == SuryaParser.name and hasattr(parser, "parse_image_regions"):
+                        if merged.image_blocks:
+                            candidates.append(
+                                parser.parse_image_regions(
+                                    pdf_path,
+                                    merged.image_blocks,
+                                    merged.page_count,
+                                )
+                            )
+                        continue
+
                     candidates.append(parser.parse(pdf_path))
                 except Exception as e:
                     print(f"[warning] OCR parser {parser.name} failed: {e}")
