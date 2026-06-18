@@ -1,8 +1,10 @@
 ocr:
   primary: "surya"
-  fallbac: "paddleocr"
+  fallback: "paddleocr"
 
   surya:
+    backend: "llamacpp"
+    inference_url: "http://127.0.0.1:8080/"
     device: "cuda"
     compile: true
     languages:
