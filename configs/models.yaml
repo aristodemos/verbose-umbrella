@@ -3,8 +3,8 @@ ocr:
   fallback: "paddleocr"
 
   surya:
-    backend: "llamacpp"
-    inference_url: "http://127.0.0.1:8080/"
+    backend: "vllm"
+    inference_url: "http://127.0.0.1:8000/v1"
     device: "cuda"
     compile: true
     languages:
