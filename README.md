@@ -35,9 +35,7 @@ uv run pdf-json-parser data/input/somatosensory.pdf --parser pymupdf
 Use a subset:
 
 ```bash
-uv run pdf-json-parser data/input/somatosensory.pdf \
-  --parser pymupdf \
-  --parser camelot,surya
+uv run pdf-json-parser data/input/somatosensory.pdf --parser pymupdf --parser camelot,surya
 ```
 
 You can also set defaults in `configs/pipeline.yaml` with `pipeline.parsers.selected`
